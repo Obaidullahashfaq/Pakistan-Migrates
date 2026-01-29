@@ -1,17 +1,9 @@
 import sys
 import time
-import json
-import os
-import urllib.request
+from datetime import datetime
 
-# ---------------- GLOBAL DATA ----------------
-
+# ================= GLOBAL DATA =================
 user_profile = {}
-visa_scores = {}
-history_log = {}
-financial_plan = {}
-
-DATA_FILE = "data.json"
 
 CONSULTANT_NOTE = """
 DISCLAIMER:
@@ -20,270 +12,228 @@ official immigration policies and Pakistani applicant trends.
 Final visa decisions are made by embassy authorities only.
 """
 
-# ---------------- UTILITIES ----------------
+IN_DEMAND_PROFESSIONS = [
+    "engineer", "doctor", "it", "software", "developer",
+    "nurse", "accountant", "electrician", "technician"
+]
 
-def slow_print(text, delay=0.002):
+PROVINCE_BONUS = {
+    "ontario": 10, "british columbia": 10, "alberta": 15, "saskatchewan": 20, "manitoba": 20,
+    "nova scotia": 15, "new south wales": 10, "victoria": 10, "queensland": 15,
+    "south australia": 20, "tasmania": 25
+}
+
+EU_COUNTRIES = ["germany", "france", "netherlands", "sweden", "norway", "denmark", "spain", "italy", "belgium"]
+ALL_COUNTRIES = ["canada", "australia", "uk", "usa", "uae"] + EU_COUNTRIES
+
+VISA_SUBCLASSES = {
+    "canada": ["Express Entry - Federal Skilled Worker", "Provincial Nominee Program", "Canadian Experience Class"],
+    "australia": ["Skilled Independent", "Skilled Nominated", "Employer Sponsored"],
+    "uk": ["Skilled Worker", "Global Talent"],
+    "usa": ["H1B", "EB2", "EB3"],
+    "germany": ["EU Blue Card", "Job Seeker Visa"],
+    "uae": ["Professional Visa", "Investor Visa"]
+}
+
+# ================= UTILITIES =================
+def slow_print(text, delay=0.001):
     for c in text:
         print(c, end="", flush=True)
         time.sleep(delay)
     print()
 
 def separator():
-    print("=" * 90)
+    print("=" * 110)
 
 def pause():
     input("\nPress Enter to continue...")
 
-def get_pkr_to_usd_rate():
-    try:
-        with urllib.request.urlopen("https://open.er-api.com/v6/latest/PKR") as response:
-            data = json.loads(response.read())
-            return data['rates']['USD']
-    except:
-        return 0.0036  # fallback
+def safe_int(prompt):
+    while True:
+        try:
+            return int(input(prompt))
+        except:
+            print("❌ Enter a valid number")
 
-# ---------------- DATA STORAGE ----------------
+def safe_float(prompt):
+    while True:
+        try:
+            return float(input(prompt))
+        except:
+            print("❌ Enter a valid number")
 
-def save_data():
-    data = {
-        "user_profile": user_profile,
-        "visa_scores": visa_scores,
-        "history_log": history_log,
-        "financial_plan": financial_plan
-    }
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+def get_valid_dob():
+    while True:
+        dob = input("Date of Birth (DD-MM-YYYY): ")
+        try:
+            datetime.strptime(dob, "%d-%m-%Y")
+            return dob
+        except:
+            print("❌ Invalid date format. Use DD-MM-YYYY")
 
-def load_data():
-    if not os.path.exists(DATA_FILE):
-        return False
-    with open(DATA_FILE, "r") as f:
-        data = json.load(f)
-        user_profile.update(data.get("user_profile", {}))
-        visa_scores.update(data.get("visa_scores", {}))
-        history_log.update(data.get("history_log", {}))
-        financial_plan.update(data.get("financial_plan", {}))
-    return True
+def calculate_age(dob):
+    birth = datetime.strptime(dob, "%d-%m-%Y")
+    today = datetime.today()
+    return today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
 
-def log_action(module, action):
-    history_log.setdefault(module, []).append(action)
-    save_data()
-
-# ---------------- USER PROFILE ----------------
-
-def collect_basic_info():
+# ================= USER INPUT =================
+def collect_user_data():
     separator()
-    slow_print("PERSONAL INFORMATION (PAKISTAN)")
+    slow_print("GLOBAL IMMIGRATION INPUT FORM (PAKISTAN)")
     separator()
     user_profile["name"] = input("Full Name: ")
-    user_profile["dob"] = input("Date of Birth (DD-MM-YYYY): ")
-    user_profile["nationality"] = "Pakistani"
-    user_profile["marital"] = input("Marital Status: ")
-    log_action("profile", "Basic info collected")
+    user_profile["dob"] = get_valid_dob()
+    user_profile["age"] = calculate_age(user_profile["dob"])
+    user_profile["marital"] = input("Marital Status (Single/Married): ").lower()
+    if user_profile["marital"] == "married":
+        user_profile["spouse_age"] = safe_int("Spouse Age: ")
+        user_profile["spouse_profession"] = input("Spouse Profession: ").lower()
+        user_profile["children"] = safe_int("Number of Children: ")
+    else:
+        user_profile["spouse_age"] = 0
+        user_profile["spouse_profession"] = ""
+        user_profile["children"] = 0
+    user_profile["marks"] = safe_float("Marks Percentage: ")
+    user_profile["qualification"] = input("Highest Qualification (Bachelors/Masters/PhD): ").lower()
+    user_profile["experience"] = safe_int("Years of Experience: ")
+    user_profile["occupation"] = input("Occupation: ").lower()
+    user_profile["ielts"] = safe_float("IELTS Overall Band (0-9): ")
+    user_profile["province"] = input("Preferred Province/State (e.g. Ontario, Alberta, Victoria): ").strip().lower()
 
-def collect_education():
-    separator()
-    slow_print("EDUCATION DETAILS")
-    separator()
-    user_profile["qualification"] = input("Highest Qualification: ")
-    user_profile["field"] = input("Field of Study: ")
-    user_profile["marks"] = float(input("Marks Percentage: "))
-    user_profile["year"] = int(input("Graduation Year: "))
-    log_action("profile", "Education recorded")
+# ================= SCORING FUNCTIONS =================
+def age_score(): 
+    a = user_profile["age"]
+    return 30 if 18 <= a <= 29 else 25 if a <= 34 else 20 if a <= 39 else 10 if a <= 44 else 0
 
-def collect_work():
-    separator()
-    slow_print("WORK EXPERIENCE")
-    separator()
-    user_profile["experience"] = int(input("Years of Experience: "))
-    user_profile["occupation"] = input("Occupation: ")
-    log_action("profile", "Work experience recorded")
-
-def collect_language():
-    separator()
-    slow_print("LANGUAGE (IELTS)")
-    separator()
-    user_profile["ielts"] = float(input("IELTS Overall Band (0-9): "))
-    log_action("profile", "IELTS recorded")
-
-def collect_finances():
-    separator()
-    slow_print("FINANCIAL INFORMATION (PAKISTAN)")
-    separator()
-    rate = get_pkr_to_usd_rate()
-    user_profile["monthly_income"] = float(input("Monthly Income (PKR): ")) * rate
-    user_profile["savings"] = float(input("Total Savings (PKR): ")) * rate
-    user_profile["liabilities"] = float(input("Liabilities (PKR): ")) * rate
-    log_action("profile", "Financials converted PKR→USD")
-
-# ---------------- SCORING ----------------
-
-def education_score():
+def education_score(): 
     m = user_profile["marks"]
     return 30 if m >= 85 else 20 if m >= 70 else 10
 
-def experience_score():
+def experience_score(): 
     e = user_profile["experience"]
     return 30 if e >= 8 else 20 if e >= 4 else 10
 
-def language_score():
+def language_score(): 
     b = user_profile["ielts"]
     return 20 if b >= 8 else 15 if b >= 7 else 10 if b >= 6 else 5
 
-def base_score():
-    return education_score() + experience_score() + language_score()
+def spouse_score(): 
+    s = 0
+    if user_profile["spouse_age"] != 0 and user_profile["spouse_age"] <= 35:
+        s += 10
+    if any(p in user_profile["spouse_profession"] for p in IN_DEMAND_PROFESSIONS):
+        s += 10
+    return s
 
-# ---------------- COUNTRY SYSTEM ----------------
+def children_penalty(): 
+    c = user_profile["children"]
+    return 0 if c <= 1 else -5 if c <= 3 else -10
 
-def canada_points():
-    visa_scores["Canada"] = base_score() + 10
-    return visa_scores["Canada"]
+def province_score(): 
+    return PROVINCE_BONUS.get(user_profile["province"],0)
 
-def australia_points():
-    visa_scores["Australia"] = base_score() + 5
-    return visa_scores["Australia"]
+# ================= COUNTRY SCORING =================
+def canada_score(): 
+    return age_score()+education_score()+language_score()*2+experience_score()+spouse_score()+children_penalty()+province_score()
 
-def germany_points():
-    score = education_score() + experience_score()
-    if "engineering" in user_profile["field"].lower():
+def australia_score(): 
+    return age_score()+education_score()+experience_score()*2+language_score()+spouse_score()+children_penalty()+province_score()
+
+def uk_score(): 
+    return age_score()+education_score()+language_score()+experience_score()+spouse_score()+children_penalty()
+
+def germany_score(): 
+    score = age_score()+education_score()+experience_score()+language_score()
+    if "engineer" in user_profile["occupation"] or "it" in user_profile["occupation"]:
         score += 15
-    visa_scores["Germany"] = score
     return score
 
-def uk_points():
-    visa_scores["UK"] = base_score()
-    return visa_scores["UK"]
+def usa_score(): 
+    score = age_score()+education_score()+experience_score()+language_score()
+    if "it" in user_profile["occupation"] or "developer" in user_profile["occupation"]:
+        score += 10
+    return score
 
-def uae_points():
-    visa_scores["UAE"] = experience_score() + 10
-    return visa_scores["UAE"]
+def uae_score(): 
+    return age_score()+experience_score()+language_score()
 
-# ---------------- PROFESSIONAL MODULES ----------------
+def europe_scores():
+    scores = {}
+    for c in EU_COUNTRIES:
+        score = age_score()+education_score()+experience_score()+language_score()
+        if "engineer" in user_profile["occupation"] or "developer" in user_profile["occupation"]:
+            score += 10
+        scores[c] = score
+    return scores
 
-def skilled_immigration():
+# ================= ELIGIBILITY =================
+def eligibility_reasons(score,country):
+    reasons=[]
+    if score < 40: reasons.append("Low overall score")
+    if user_profile["ielts"] < 6 and country in ["canada","australia","uk"]: reasons.append("Low language score")
+    if user_profile["experience"] < 2 and country in ["canada","australia","usa"]: reasons.append("Insufficient experience")
+    return reasons if reasons else ["Eligible based on provided data"]
+
+# ================= DISPLAY =================
+def show_country_table():
     separator()
-    slow_print("SKILLED IMMIGRATION ASSESSMENT")
+    print(f"{'Country':<20}{'Score':<8}{'Visa Subclass':<40}{'Eligibility Notes'}")
+    print("-"*110)
+    countries=["Canada","Australia","UK","Germany","USA","UAE"]
+    scores=[canada_score(), australia_score(), uk_score(), germany_score(), usa_score(), uae_score()]
+    for c,s in zip(countries,scores):
+        subclass=", ".join(VISA_SUBCLASSES.get(c.lower(),[]))
+        notes="; ".join(eligibility_reasons(s,c.lower()))
+        print(f"{c:<20}{s:<8}{subclass:<40}{notes}")
+    eu = europe_scores()
+    for c,s in eu.items():
+        subclass="EU Blue Card / Job Seeker"
+        notes="; ".join(eligibility_reasons(s,c))
+        print(f"{c.title():<20}{s:<8}{subclass:<40}{notes}")
+    pause()
+
+def ascii_chart_all():
     separator()
-
-    canada_points()
-    australia_points()
-    germany_points()
-    uk_points()
-    uae_points()
-
-    for c, p in visa_scores.items():
-        slow_print(f"{c}: {p} points")
-
-    log_action("skilled", "Skilled immigration evaluated")
+    countries=["Canada","Australia","UK","Germany","USA","UAE"] + EU_COUNTRIES
+    scores=[canada_score(), australia_score(), uk_score(), germany_score(), usa_score(), uae_score()] + list(europe_scores().values())
+    for c,s in zip(countries,scores):
+        bar = '█' * (s//5)
+        print(f"{c:<12}: {bar} {s}")
     pause()
 
 def ai_recommendation():
     separator()
-    slow_print("AI CONSULTANT RECOMMENDATION")
-    separator()
-
-    ranked = sorted(visa_scores.items(), key=lambda x: x[1], reverse=True)
-    for i, (c, s) in enumerate(ranked, 1):
-        slow_print(f"Rank {i}: {c} (Score: {s})")
-
-    slow_print(f"\nBest Option for Pakistani Applicant: {ranked[0][0]}")
-    log_action("ai", "AI recommendation generated")
+    all_scores = {"Canada":canada_score(), "Australia":australia_score(), "UK":uk_score(), "Germany":germany_score(), "USA":usa_score(), "UAE":uae_score()}
+    all_scores.update(europe_scores())
+    ranked = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
+    print("=== Recommended Countries (Highest Score First) ===")
+    for i,(c,s) in enumerate(ranked,1):
+        print(f"{i}. {c.title()} - {s} points")
     pause()
 
-def rejection_analysis():
-    separator()
-    slow_print("PAKISTAN VISA REJECTION RISK")
-    separator()
-
-    risks = []
-    if user_profile["ielts"] < 6:
-        risks.append("Low IELTS")
-    if user_profile["monthly_income"] < 400:
-        risks.append("Weak financial proof")
-    if user_profile["experience"] < 2:
-        risks.append("Low work experience")
-
-    if not risks:
-        slow_print("Low rejection risk detected")
-    else:
-        slow_print("Possible rejection reasons:")
-        for r in risks:
-            slow_print(f"- {r}")
-
-    log_action("risk", "Rejection risk analyzed")
-    pause()
-
-def document_checklist():
-    separator()
-    slow_print("PAKISTAN DOCUMENT CHECKLIST")
-    separator()
-    docs = [
-        "Passport (6+ months validity)",
-        "NADRA CNIC",
-        "HEC Attested Degrees",
-        "IELTS TRF",
-        "6-Month Bank Statement",
-        "Police Clearance",
-        "Medical (Embassy Approved)"
-    ]
-    for d in docs:
-        slow_print(f"- {d}")
-    log_action("docs", "Checklist generated")
-    pause()
-
-def official_resources():
-    separator()
-    slow_print("OFFICIAL GOVERNMENT WEBSITES")
-    separator()
-    slow_print("Canada: https://www.canada.ca/immigration")
-    slow_print("UK: https://www.gov.uk/immigration")
-    slow_print("Australia: https://immi.homeaffairs.gov.au")
-    slow_print("Germany: https://www.make-it-in-germany.com")
-    slow_print("IELTS: https://www.ielts.org")
-    slow_print("HEC Pakistan: https://www.hec.gov.pk")
-    slow_print("NADRA: https://www.nadra.gov.pk")
-    pause()
-
-# ---------------- MENU ----------------
-
+# ================= MENU =================
 def menu():
     separator()
-    print("1. Skilled Immigration Assessment")
-    print("2. AI Recommendation")
-    print("3. Rejection Risk Analysis")
-    print("4. Document Checklist")
-    print("5. Official Resources")
+    print("1. View Country-wise Scores & Eligibility")
+    print("2. Visual Score Chart")
+    print("3. AI-style Recommendation")
     print("0. Exit")
     return input("Select Option: ")
 
-# ---------------- MAIN ----------------
-
+# ================= MAIN =================
 def main():
     separator()
-    slow_print("PROFESSIONAL IMMIGRATION SUPPORT SYSTEM (PAKISTAN)")
+    slow_print("GLOBAL IMMIGRATION SUPPORT SYSTEM (PAKISTANI APPLICANT)")
     separator()
     slow_print(CONSULTANT_NOTE)
-
-    if not load_data():
-        collect_basic_info()
-        collect_education()
-        collect_work()
-        collect_language()
-        collect_finances()
-
+    collect_user_data()
     while True:
-        c = menu()
-        if c == "1": skilled_immigration()
-        elif c == "2": ai_recommendation()
-        elif c == "3": rejection_analysis()
-        elif c == "4": document_checklist()
-        elif c == "5": official_resources()
-        elif c == "0":
-            slow_print("Session Ended")
-            sys.exit()
-        else:
-            slow_print("Invalid option")
+        choice = menu()
+        if choice == "1": show_country_table()
+        elif choice == "2": ascii_chart_all()
+        elif choice == "3": ai_recommendation()
+        elif choice == "0": print("Session Ended"); sys.exit()
+        else: print("Invalid option")
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
-
