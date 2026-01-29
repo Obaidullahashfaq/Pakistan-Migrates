@@ -23,8 +23,7 @@ PROVINCE_BONUS = {
     "south australia": 20, "tasmania": 25
 }
 
-EU_COUNTRIES = ["germany", "france", "netherlands", "sweden", "norway", "denmark", "spain", "italy", "belgium"]
-ALL_COUNTRIES = ["canada", "australia", "uk", "usa", "uae"] + EU_COUNTRIES
+EU_COUNTRIES = ["germany","france","netherlands","sweden","norway","denmark","spain","italy","belgium"]
 
 VISA_SUBCLASSES = {
     "canada": ["Express Entry - Federal Skilled Worker", "Provincial Nominee Program", "Canadian Experience Class"],
@@ -35,6 +34,35 @@ VISA_SUBCLASSES = {
     "uae": ["Professional Visa", "Investor Visa"]
 }
 
+OFFICIAL_WEBSITES = {
+    "canada": "https://www.canada.ca/en/immigration-refugees-citizenship.html",
+    "australia": "https://immi.homeaffairs.gov.au/",
+    "uk": "https://www.gov.uk/browse/visas-immigration",
+    "usa": "https://www.uscis.gov/",
+    "uae": "https://u.ae/en/information-and-services/visa-and-emirates-id",
+    "germany": "https://www.make-it-in-germany.com/en/",
+    "france": "https://france-visas.gouv.fr/",
+    "netherlands": "https://ind.nl/en",
+    "sweden": "https://www.migrationsverket.se/English.html",
+    "norway": "https://www.udi.no/en/",
+    "denmark": "https://www.nyidanmark.dk/en-GB",
+    "spain": "https://www.exteriores.gob.es/en/ServiciosAlCiudadano/Paginas/inicio.aspx",
+    "italy": "https://vistoperitalia.esteri.it/home/en",
+    "belgium": "https://dofi.ibz.be/en/themes/immigration"
+}
+
+DOCUMENT_CHECKLIST = {
+    "general": [
+        "Passport (valid at least 6 months)",
+        "Educational transcripts and degree certificates",
+        "Work experience letters",
+        "IELTS / Language Test Score",
+        "Marriage certificate (if married)",
+        "Birth certificates of children (if any)",
+        "Proof of funds"
+    ]
+}
+
 # ================= UTILITIES =================
 def slow_print(text, delay=0.001):
     for c in text:
@@ -43,7 +71,7 @@ def slow_print(text, delay=0.001):
     print()
 
 def separator():
-    print("=" * 110)
+    print("="*120)
 
 def pause():
     input("\nPress Enter to continue...")
@@ -101,111 +129,111 @@ def collect_user_data():
     user_profile["province"] = input("Preferred Province/State (e.g. Ontario, Alberta, Victoria): ").strip().lower()
 
 # ================= SCORING FUNCTIONS =================
-def age_score(): 
-    a = user_profile["age"]
-    return 30 if 18 <= a <= 29 else 25 if a <= 34 else 20 if a <= 39 else 10 if a <= 44 else 0
+def age_score():
+    a=user_profile["age"]
+    return 30 if 18<=a<=29 else 25 if a<=34 else 20 if a<=39 else 10 if a<=44 else 0
 
-def education_score(): 
-    m = user_profile["marks"]
-    return 30 if m >= 85 else 20 if m >= 70 else 10
+def education_score():
+    m=user_profile["marks"]
+    return 30 if m>=85 else 20 if m>=70 else 10
 
-def experience_score(): 
-    e = user_profile["experience"]
-    return 30 if e >= 8 else 20 if e >= 4 else 10
+def experience_score():
+    e=user_profile["experience"]
+    return 30 if e>=8 else 20 if e>=4 else 10
 
-def language_score(): 
-    b = user_profile["ielts"]
-    return 20 if b >= 8 else 15 if b >= 7 else 10 if b >= 6 else 5
+def language_score():
+    b=user_profile["ielts"]
+    return 20 if b>=8 else 15 if b>=7 else 10 if b>=6 else 5
 
-def spouse_score(): 
-    s = 0
-    if user_profile["spouse_age"] != 0 and user_profile["spouse_age"] <= 35:
-        s += 10
+def spouse_score():
+    s=0
+    if user_profile["spouse_age"] !=0 and user_profile["spouse_age"]<=35:
+        s+=10
     if any(p in user_profile["spouse_profession"] for p in IN_DEMAND_PROFESSIONS):
-        s += 10
+        s+=10
     return s
 
-def children_penalty(): 
-    c = user_profile["children"]
-    return 0 if c <= 1 else -5 if c <= 3 else -10
+def children_penalty():
+    c=user_profile["children"]
+    return 0 if c<=1 else -5 if c<=3 else -10
 
-def province_score(): 
+def province_score():
     return PROVINCE_BONUS.get(user_profile["province"],0)
 
 # ================= COUNTRY SCORING =================
-def canada_score(): 
-    return age_score()+education_score()+language_score()*2+experience_score()+spouse_score()+children_penalty()+province_score()
-
-def australia_score(): 
-    return age_score()+education_score()+experience_score()*2+language_score()+spouse_score()+children_penalty()+province_score()
-
-def uk_score(): 
-    return age_score()+education_score()+language_score()+experience_score()+spouse_score()+children_penalty()
-
-def germany_score(): 
+def canada_score(): return age_score()+education_score()+language_score()*2+experience_score()+spouse_score()+children_penalty()+province_score()
+def australia_score(): return age_score()+education_score()+experience_score()*2+language_score()+spouse_score()+children_penalty()+province_score()
+def uk_score(): return age_score()+education_score()+language_score()+experience_score()+spouse_score()+children_penalty()
+def germany_score():
     score = age_score()+education_score()+experience_score()+language_score()
     if "engineer" in user_profile["occupation"] or "it" in user_profile["occupation"]:
-        score += 15
+        score +=15
     return score
-
-def usa_score(): 
+def usa_score():
     score = age_score()+education_score()+experience_score()+language_score()
     if "it" in user_profile["occupation"] or "developer" in user_profile["occupation"]:
-        score += 10
+        score +=10
     return score
-
-def uae_score(): 
-    return age_score()+experience_score()+language_score()
-
+def uae_score(): return age_score()+experience_score()+language_score()
 def europe_scores():
-    scores = {}
+    scores={}
     for c in EU_COUNTRIES:
-        score = age_score()+education_score()+experience_score()+language_score()
+        score=age_score()+education_score()+experience_score()+language_score()
         if "engineer" in user_profile["occupation"] or "developer" in user_profile["occupation"]:
-            score += 10
-        scores[c] = score
+            score+=10
+        scores[c]=score
     return scores
 
 # ================= ELIGIBILITY =================
 def eligibility_reasons(score,country):
     reasons=[]
-    if score < 40: reasons.append("Low overall score")
-    if user_profile["ielts"] < 6 and country in ["canada","australia","uk"]: reasons.append("Low language score")
-    if user_profile["experience"] < 2 and country in ["canada","australia","usa"]: reasons.append("Insufficient experience")
+    if score<40: reasons.append("Low overall score")
+    if user_profile["ielts"]<6 and country in ["canada","australia","uk"]: reasons.append("Low language score")
+    if user_profile["experience"]<2 and country in ["canada","australia","usa"]: reasons.append("Insufficient experience")
     return reasons if reasons else ["Eligible based on provided data"]
 
 # ================= DISPLAY =================
 def show_country_table():
     separator()
-    print(f"{'Country':<20}{'Score':<8}{'Visa Subclass':<40}{'Eligibility Notes'}")
-    print("-"*110)
+    print(f"{'Country':<20}{'Score':<8}{'Visa Subclass':<40}{'Official Website':<40}{'Eligibility Notes'}")
+    print("-"*160)
+    
     countries=["Canada","Australia","UK","Germany","USA","UAE"]
     scores=[canada_score(), australia_score(), uk_score(), germany_score(), usa_score(), uae_score()]
     for c,s in zip(countries,scores):
-        subclass=", ".join(VISA_SUBCLASSES.get(c.lower(),[]))
-        notes="; ".join(eligibility_reasons(s,c.lower()))
-        print(f"{c:<20}{s:<8}{subclass:<40}{notes}")
+        subclass = ", ".join(VISA_SUBCLASSES.get(c.lower(), []))
+        website = OFFICIAL_WEBSITES.get(c.lower(), "N/A")
+        notes = "; ".join(eligibility_reasons(s, c.lower()))
+        print(f"{c:<20}{s:<8}{subclass:<40}{website:<40}{notes}")
+    
     eu = europe_scores()
     for c,s in eu.items():
         subclass="EU Blue Card / Job Seeker"
-        notes="; ".join(eligibility_reasons(s,c))
-        print(f"{c.title():<20}{s:<8}{subclass:<40}{notes}")
+        website=OFFICIAL_WEBSITES.get(c.lower(), "N/A")
+        notes="; ".join(eligibility_reasons(s, c.lower()))
+        print(f"{c.title():<20}{s:<8}{subclass:<40}{website:<40}{notes}")
+    
+    separator()
+    print("\n📋 General Document Checklist:")
+    for doc in DOCUMENT_CHECKLIST["general"]:
+        print(f" - {doc}")
     pause()
 
+# ================= VISUAL & AI =================
 def ascii_chart_all():
     separator()
     countries=["Canada","Australia","UK","Germany","USA","UAE"] + EU_COUNTRIES
     scores=[canada_score(), australia_score(), uk_score(), germany_score(), usa_score(), uae_score()] + list(europe_scores().values())
     for c,s in zip(countries,scores):
-        bar = '█' * (s//5)
+        bar='█'*(s//5)
         print(f"{c:<12}: {bar} {s}")
     pause()
 
 def ai_recommendation():
     separator()
-    all_scores = {"Canada":canada_score(), "Australia":australia_score(), "UK":uk_score(), "Germany":germany_score(), "USA":usa_score(), "UAE":uae_score()}
+    all_scores={"Canada":canada_score(),"Australia":australia_score(),"UK":uk_score(),"Germany":germany_score(),"USA":usa_score(),"UAE":uae_score()}
     all_scores.update(europe_scores())
-    ranked = sorted(all_scores.items(), key=lambda x: x[1], reverse=True)
+    ranked=sorted(all_scores.items(), key=lambda x:x[1], reverse=True)
     print("=== Recommended Countries (Highest Score First) ===")
     for i,(c,s) in enumerate(ranked,1):
         print(f"{i}. {c.title()} - {s} points")
@@ -214,7 +242,7 @@ def ai_recommendation():
 # ================= MENU =================
 def menu():
     separator()
-    print("1. View Country-wise Scores & Eligibility")
+    print("1. View Country-wise Scores, Eligibility & Documents")
     print("2. Visual Score Chart")
     print("3. AI-style Recommendation")
     print("0. Exit")
@@ -229,11 +257,12 @@ def main():
     collect_user_data()
     while True:
         choice = menu()
-        if choice == "1": show_country_table()
-        elif choice == "2": ascii_chart_all()
-        elif choice == "3": ai_recommendation()
-        elif choice == "0": print("Session Ended"); sys.exit()
+        if choice=="1": show_country_table()
+        elif choice=="2": ascii_chart_all()
+        elif choice=="3": ai_recommendation()
+        elif choice=="0": print("Session Ended"); sys.exit()
         else: print("Invalid option")
 
 if __name__=="__main__":
     main()
+
